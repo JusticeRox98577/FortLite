@@ -113,7 +113,7 @@ function movePlayer() {
 
   if (isDancing) {
     danceFrame++;
-    player.position.x += Math.sin(danceFrame * 0.2) * 0.05;
+    player.position.x += Math.sin(danceFrame * 0.3) * 0.05;
   }
 
   camera.position.copy(player.position).add(cameraOffset);
