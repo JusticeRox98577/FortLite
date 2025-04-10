@@ -1,6 +1,6 @@
-# FortLite
+# Fortnight
 
-# Fortnite Lite - Web Edition
+# Fortnight - Web Edition
 
 Welcome to the chaotic, low-budget, web-powered remake of Fortnite... built with raw HTML, CSS, and JavaScript. Inspired by the original battle royale madness, this game features:
 
