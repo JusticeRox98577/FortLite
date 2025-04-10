@@ -1,214 +1,167 @@
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+// Setup
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202020);
 
-const WIDTH = canvas.width;
-const HEIGHT = canvas.height;
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.set(0, 5, 10);
 
-let keys = {};
-let bullets = [];
-let walls = [];
-let enemies = [];
-let emote = null;
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-let player = {
-  x: WIDTH / 2,
-  y: HEIGHT / 2,
-  width: 30,
-  height: 30,
-  speed: 3,
-  color: "blue", // Chun-Li rectangle
-  health: 100,
-  isDancing: false,
-  emoteFrame: 0
-};
+// UI
+let playerHealth = 100;
+const healthDisplay = document.getElementById("health");
 
-let storm = {
-  x: WIDTH / 2,
-  y: HEIGHT / 2,
-  radius: 300,
-  shrinkRate: 0.2
-};
+// Lights
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(10, 10, 10);
+scene.add(light);
+scene.add(new THREE.AmbientLight(0x404040));
 
-let mouse = { x: 0, y: 0 };
-let gameOver = false;
+// Floor
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(100, 100),
+  new THREE.MeshStandardMaterial({ color: 0x333333 })
+);
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
 
+// Player ("Chun-Li")
+const player = new THREE.Mesh(
+  new THREE.CapsuleGeometry(0.5, 1.5, 4, 8),
+  new THREE.MeshStandardMaterial({ color: 0x2a5bd7 }) // Blue Chun-Li
+);
+player.position.set(0, 1, 0);
+scene.add(player);
+
+// Camera follow
+const cameraOffset = new THREE.Vector3(0, 5, -10);
+
+// Controls
+const keys = {};
+let isDancing = false;
+let danceFrame = 0;
 document.addEventListener("keydown", e => {
   keys[e.key.toLowerCase()] = true;
-
-  // Emote triggers
-  if (e.key === "e") {
-    player.isDancing = true;
-    player.emoteFrame = 0;
-  }
-
-  if (e.key === "b") {
-    walls.push({
-      x: player.x,
-      y: player.y,
-      width: 40,
-      height: 40,
-      color: "gray"
-    });
-  }
+  if (e.key === "e") isDancing = true;
+  if (e.key === "b") buildWall();
 });
-
 document.addEventListener("keyup", e => {
   keys[e.key.toLowerCase()] = false;
-
-  if (e.key === "e") {
-    player.isDancing = false;
-  }
+  if (e.key === "e") isDancing = false;
 });
 
-canvas.addEventListener("click", () => {
-  const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-  bullets.push({
-    x: player.x,
-    y: player.y,
-    dx: Math.cos(angle) * 6,
-    dy: Math.sin(angle) * 6,
-    size: 5
-  });
+// Mouse aiming
+let bullets = [];
+document.addEventListener("click", () => {
+  const bullet = new THREE.Mesh(
+    new THREE.SphereGeometry(0.1),
+    new THREE.MeshStandardMaterial({ color: 0xffff00 })
+  );
+  bullet.position.copy(player.position);
+  const dir = new THREE.Vector3().subVectors(camera.position, player.position).normalize().negate();
+  bullet.userData.velocity = dir.multiplyScalar(0.5);
+  scene.add(bullet);
+  bullets.push(bullet);
 });
 
-canvas.addEventListener("mousemove", e => {
-  const rect = canvas.getBoundingClientRect();
-  mouse.x = e.clientX - rect.left;
-  mouse.y = e.clientY - rect.top;
-});
+// Storm
+const storm = new THREE.Mesh(
+  new THREE.SphereGeometry(50, 32, 32),
+  new THREE.MeshBasicMaterial({ color: 0x8800ff, wireframe: true })
+);
+storm.position.set(0, 10, 0);
+scene.add(storm);
+let stormRadius = 50;
 
+// Enemies
+let enemies = [];
 function spawnEnemy() {
-  enemies.push({
-    x: Math.random() * WIDTH,
-    y: Math.random() * HEIGHT,
-    size: 30,
-    speed: 1.5,
-    health: 50
-  });
+  const enemy = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial({ color: 0xff0000 })
+  );
+  enemy.position.set((Math.random() - 0.5) * 40, 0.5, (Math.random() - 0.5) * 40);
+  scene.add(enemy);
+  enemies.push(enemy);
+}
+for (let i = 0; i < 5; i++) spawnEnemy();
+
+// Build system
+let walls = [];
+function buildWall() {
+  const wall = new THREE.Mesh(
+    new THREE.BoxGeometry(2, 2, 0.5),
+    new THREE.MeshStandardMaterial({ color: 0x888888 })
+  );
+  const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
+  wall.position.copy(player.position.clone().add(dir.multiplyScalar(3)));
+  wall.position.y = 1;
+  scene.add(wall);
+  walls.push(wall);
 }
 
-function update() {
-  if (gameOver) return;
+// Movement
+function movePlayer() {
+  const speed = 0.15;
+  let moved = false;
+  if (keys["w"]) { player.position.z -= speed; moved = true; }
+  if (keys["s"]) { player.position.z += speed; moved = true; }
+  if (keys["a"]) { player.position.x -= speed; moved = true; }
+  if (keys["d"]) { player.position.x += speed; moved = true; }
 
-  // Movement
-  if (keys["w"]) player.y -= player.speed;
-  if (keys["s"]) player.y += player.speed;
-  if (keys["a"]) player.x -= player.speed;
-  if (keys["d"]) player.x += player.speed;
-
-  // Emote animation
-  if (player.isDancing) {
-    player.emoteFrame++;
-    player.x += Math.sin(player.emoteFrame * 0.2) * 0.5; // wiggle hips
+  if (isDancing) {
+    danceFrame++;
+    player.position.x += Math.sin(danceFrame * 0.2) * 0.05;
   }
 
-  // Bullets
-  bullets.forEach((b, i) => {
-    b.x += b.dx;
-    b.y += b.dy;
+  camera.position.copy(player.position).add(cameraOffset);
+  camera.lookAt(player.position);
+}
 
-    // Bullet hits enemy
-    enemies.forEach((e, ei) => {
-      if (
-        b.x > e.x &&
-        b.x < e.x + e.size &&
-        b.y > e.y &&
-        b.y < e.y + e.size
-      ) {
-        e.health -= 25;
+// Game loop
+function animate() {
+  requestAnimationFrame(animate);
+
+  movePlayer();
+
+  bullets.forEach((b, i) => {
+    b.position.add(b.userData.velocity);
+    if (b.position.length() > 100) {
+      scene.remove(b);
+      bullets.splice(i, 1);
+    }
+
+    enemies.forEach((e, j) => {
+      if (b.position.distanceTo(e.position) < 0.8) {
+        scene.remove(e);
+        enemies.splice(j, 1);
+        scene.remove(b);
         bullets.splice(i, 1);
       }
     });
   });
 
-  // Remove dead enemies
-  enemies = enemies.filter(e => e.health > 0);
-
-  // Enemy movement
-  enemies.forEach(e => {
-    const dx = player.x - e.x;
-    const dy = player.y - e.y;
-    const dist = Math.hypot(dx, dy);
-    e.x += (dx / dist) * e.speed;
-    e.y += (dy / dist) * e.speed;
-
-    // Collision with player
-    if (
-      e.x < player.x + player.width &&
-      e.x + e.size > player.x &&
-      e.y < player.y + player.height &&
-      e.y + e.size > player.y
-    ) {
-      player.health -= 0.5;
-    }
+  enemies.forEach(enemy => {
+    const dir = new THREE.Vector3().subVectors(player.position, enemy.position).normalize();
+    enemy.position.add(dir.multiplyScalar(0.03));
+    if (enemy.position.distanceTo(player.position) < 1.5) playerHealth -= 0.2;
   });
 
-  // Storm shrink
-  storm.radius -= storm.shrinkRate;
-  const dx = player.x - storm.x;
-  const dy = player.y - storm.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  const outside = distance > storm.radius;
+  stormRadius -= 0.01;
+  storm.scale.setScalar(stormRadius / 50);
+  if (player.position.length() > stormRadius) {
+    playerHealth -= 0.3;
+  }
 
-  if (outside) {
-    player.health -= 0.4;
-    document.getElementById("zone-warning").style.display = "block";
+  if (playerHealth <= 0) {
+    healthDisplay.textContent = "💀 Game Over – Refresh to retry";
   } else {
-    document.getElementById("zone-warning").style.display = "none";
+    healthDisplay.textContent = `Health: ${Math.max(0, playerHealth.toFixed(0))}`;
   }
 
-  if (player.health <= 0) {
-    gameOver = true;
-  }
-
-  document.getElementById("health").innerText = `Health: ${Math.max(
-    0,
-    Math.floor(player.health)
-  )}`;
+  renderer.render(scene, camera);
 }
 
-function draw() {
-  ctx.clearRect(0, 0, WIDTH, HEIGHT);
-
-  // Storm
-  ctx.beginPath();
-  ctx.arc(storm.x, storm.y, storm.radius, 0, Math.PI * 2);
-  ctx.strokeStyle = "purple";
-  ctx.lineWidth = 5;
-  ctx.stroke();
-
-  // Walls
-  walls.forEach(w => {
-    ctx.fillStyle = w.color;
-    ctx.fillRect(w.x, w.y, w.width, w.height);
-  });
-
-  // Bullets
-  ctx.fillStyle = "yellow";
-  bullets.forEach(b => ctx.fillRect(b.x, b.y, b.size, b.size));
-
-  // Enemies
-  ctx.fillStyle = "red";
-  enemies.forEach(e => ctx.fillRect(e.x, e.y, e.size, e.size));
-
-  // Player (Chun-Li rectangle)
-  ctx.fillStyle = player.color;
-  ctx.fillRect(player.x, player.y, player.width, player.height);
-
-  // Game Over
-  if (gameOver) {
-    ctx.fillStyle = "white";
-    ctx.font = "40px Arial";
-    ctx.fillText("GAME OVER", WIDTH / 2 - 120, HEIGHT / 2);
-  }
-}
-
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
-
-// Start game
-for (let i = 0; i < 5; i++) spawnEnemy();
-loop();
+animate();
