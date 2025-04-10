@@ -1,0 +1,55 @@
+/* Body Styling */
+body {
+  margin: 0;
+  background-color: #121212;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+/* Game Container */
+#game-container {
+  position: relative;
+  width: 800px;
+  height: 600px;
+  margin: 20px auto;
+  border: 2px solid #444;
+  box-shadow: 0 0 20px #000;
+}
+
+/* Canvas */
+canvas {
+  background-color: #1e1e1e;
+  display: block;
+}
+
+/* UI */
+#ui {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+}
+
+#health {
+  font-size: 18px;
+}
+
+#zone-warning {
+  color: red;
+  font-weight: bold;
+  font-size: 18px;
+  animation: blink 0.7s infinite;
+}
+
+@keyframes blink {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.2; }
+  100% { opacity: 1; }
+}
+
+/* Button or Emote Instructions */
+#ui p:last-child {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #ccc;
+}
